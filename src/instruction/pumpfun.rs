@@ -93,11 +93,15 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
         };
 
         let associated_bonding_curve =
-            crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
-                &bonding_curve_addr,
-                &params.output_mint,
-                &token_program,
-            );
+            if protocol_params.associated_bonding_curve != Pubkey::default() {
+                protocol_params.associated_bonding_curve
+            } else {
+                crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
+                    &bonding_curve_addr,
+                    &params.output_mint,
+                    &token_program,
+                )
+            };
 
         let user_token_account =
             crate::common::fast_fn::get_associated_token_address_with_program_id_fast_use_seed(
@@ -248,11 +252,15 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
         };
 
         let associated_bonding_curve =
-            crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
-                &bonding_curve_addr,
-                &params.input_mint,
-                &token_program,
-            );
+            if protocol_params.associated_bonding_curve != Pubkey::default() {
+                protocol_params.associated_bonding_curve
+            } else {
+                crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
+                    &bonding_curve_addr,
+                    &params.input_mint,
+                    &token_program,
+                )
+            };
 
         let user_token_account =
             crate::common::fast_fn::get_associated_token_address_with_program_id_fast_use_seed(
