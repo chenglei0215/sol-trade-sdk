@@ -1,6 +1,6 @@
 use crate::{
     common::spl_token::close_account,
-    constants::{trade::trade::DEFAULT_SLIPPAGE, TOKEN_PROGRAM_2022},
+    constants::{trade::trade::DEFAULT_SLIPPAGE, TOKEN_PROGRAM, TOKEN_PROGRAM_2022},
     trading::core::{
         params::{PumpFunParams, SwapParams},
         traits::InstructionBuilder,
@@ -25,6 +25,35 @@ use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signer::Signer};
 
 /// Instruction builder for PumpFun protocol
 pub struct PumpFunInstructionBuilder;
+
+fn resolve_token_program_from_associated_bonding_curve(
+    configured_token_program: Pubkey,
+    bonding_curve: &Pubkey,
+    mint: &Pubkey,
+    associated_bonding_curve: Pubkey,
+) -> Pubkey {
+    if associated_bonding_curve != Pubkey::default() {
+        let token_ata = crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
+            bonding_curve,
+            mint,
+            &TOKEN_PROGRAM,
+        );
+        if token_ata == associated_bonding_curve {
+            return TOKEN_PROGRAM;
+        }
+
+        let token_2022_ata = crate::common::fast_fn::get_associated_token_address_with_program_id_fast(
+            bonding_curve,
+            mint,
+            &TOKEN_PROGRAM_2022,
+        );
+        if token_2022_ata == associated_bonding_curve {
+            return TOKEN_PROGRAM_2022;
+        }
+    }
+
+    configured_token_program
+}
 
 #[async_trait::async_trait]
 impl InstructionBuilder for PumpFunInstructionBuilder {
@@ -85,8 +114,13 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
 
         // Determine token program based on mayhem mode
         let is_mayhem_mode = bonding_curve.is_mayhem_mode;
-        let token_program = protocol_params.token_program;
-        let token_program_meta = if protocol_params.token_program == TOKEN_PROGRAM_2022 {
+        let token_program = resolve_token_program_from_associated_bonding_curve(
+            protocol_params.token_program,
+            &bonding_curve_addr,
+            &params.output_mint,
+            protocol_params.associated_bonding_curve,
+        );
+        let token_program_meta = if token_program == TOKEN_PROGRAM_2022 {
             crate::constants::TOKEN_PROGRAM_2022_META
         } else {
             crate::constants::TOKEN_PROGRAM_META
@@ -244,8 +278,13 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
 
         // Determine token program based on mayhem mode
         let is_mayhem_mode = bonding_curve.is_mayhem_mode;
-        let token_program = protocol_params.token_program;
-        let token_program_meta = if protocol_params.token_program == TOKEN_PROGRAM_2022 {
+        let token_program = resolve_token_program_from_associated_bonding_curve(
+            protocol_params.token_program,
+            &bonding_curve_addr,
+            &params.input_mint,
+            protocol_params.associated_bonding_curve,
+        );
+        let token_program_meta = if token_program == TOKEN_PROGRAM_2022 {
             crate::constants::TOKEN_PROGRAM_2022_META
         } else {
             crate::constants::TOKEN_PROGRAM_META
