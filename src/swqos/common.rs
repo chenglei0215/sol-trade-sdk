@@ -109,7 +109,7 @@ pub async fn poll_any_transaction_confirmation(
     }
 
     let timeout: Duration = Duration::from_secs(15);
-    let interval: Duration = Duration::from_millis(1000);
+    let interval: Duration = Duration::from_millis(100); // custom: shorten confirmation polling latency.
     let start: Instant = Instant::now();
     let mut poll_count = 0u32;
     // Track which signature landed (confirmed or failed on-chain)
@@ -150,7 +150,7 @@ pub async fn poll_any_transaction_confirmation(
         }
 
         let landed = landed_sig.unwrap();
-        let should_get_transaction = poll_count >= 10;
+        let should_get_transaction = poll_count >= 1; // custom: surface on-chain failures quickly instead of waiting ~10s.
 
         if !should_get_transaction {
             sleep(interval).await;

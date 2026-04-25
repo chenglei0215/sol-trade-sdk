@@ -302,7 +302,8 @@ impl ResultCollector {
     ) -> Option<(bool, Vec<Signature>, Option<anyhow::Error>, Vec<(SwqosType, i64)>)> {
         let start = Instant::now();
         let timeout = std::time::Duration::from_secs(5);
-        let poll_interval = std::time::Duration::from_millis(1000);
+        // custom: return shortly after any SWQoS channel submits successfully.
+        let poll_interval = std::time::Duration::from_millis(10);
 
         loop {
             if self.success_flag.load(Ordering::Acquire) {
