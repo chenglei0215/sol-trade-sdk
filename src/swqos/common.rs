@@ -71,6 +71,41 @@ impl From<anyhow::Error> for TradeError {
     }
 }
 
+const MAX_ONCHAIN_ERROR_LOG_LINES: usize = 10;
+
+fn collect_log_messages(
+    logs: &solana_transaction_status::option_serializer::OptionSerializer<Vec<String>>,
+) -> Vec<String> {
+    match logs {
+        solana_transaction_status::option_serializer::OptionSerializer::Some(logs) => logs.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn print_onchain_failure_details(
+    signature: &Signature,
+    tx_err: &TransactionError,
+    raw_err: &serde_json::Value,
+    instruction: Option<u8>,
+    code: u32,
+    parsed_message: &str,
+    logs: &[String],
+) {
+    if !crate::common::sdk_log::sdk_log_enabled() {
+        return;
+    }
+
+    eprintln!(
+        " [SDK][onchain] transaction failed: signature={}, err={:?}, raw_err={}, instruction={:?}, code={}, parsed_message={}",
+        signature, tx_err, raw_err, instruction, code, parsed_message
+    );
+
+    let start = logs.len().saturating_sub(MAX_ONCHAIN_ERROR_LOG_LINES);
+    for log in &logs[start..] {
+        eprintln!(" [SDK][onchain] log: {}", log);
+    }
+}
+
 // High-performance serialization
 
 pub trait FormatBase64VersionedTransaction {
@@ -109,7 +144,7 @@ pub async fn poll_any_transaction_confirmation(
     }
 
     let timeout: Duration = Duration::from_secs(15);
-    let interval: Duration = Duration::from_millis(1000);
+    let interval: Duration = Duration::from_millis(100); // custom: shorten confirmation polling latency.
     let start: Instant = Instant::now();
     let mut poll_count = 0u32;
     // Track which signature landed (confirmed or failed on-chain)
@@ -117,6 +152,18 @@ pub async fn poll_any_transaction_confirmation(
 
     loop {
         if start.elapsed() >= timeout {
+            if crate::common::sdk_log::sdk_log_enabled() {
+                let sigs = signatures
+                    .iter()
+                    .map(|sig| sig.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                eprintln!(
+                    " [SDK][onchain] confirmation timed out after {}s; signatures={}",
+                    timeout.as_secs(),
+                    sigs
+                );
+            }
             return Err(anyhow::anyhow!(
                 "Transaction confirmation timed out after {}s ({} signatures polled)",
                 timeout.as_secs(),
@@ -150,7 +197,7 @@ pub async fn poll_any_transaction_confirmation(
         }
 
         let landed = landed_sig.unwrap();
-        let should_get_transaction = poll_count >= 10;
+        let should_get_transaction = poll_count >= 1; // custom: surface on-chain failures quickly instead of waiting ~10s.
 
         if !should_get_transaction {
             sleep(interval).await;
@@ -186,29 +233,26 @@ pub async fn poll_any_transaction_confirmation(
             } else {
                 // Extract error message from log_messages
                 let mut error_msg = String::new();
-                if let solana_transaction_status::option_serializer::OptionSerializer::Some(logs) =
-                    &meta.log_messages
-                {
-                    for log in logs {
-                        if let Some(idx) = log.find("Error Message: ") {
-                            let msg = log[idx + 15..].trim_end_matches('.').to_string();
-                            if !error_msg.is_empty() {
-                                error_msg.push_str("; ");
-                            }
-                            error_msg.push_str(&msg);
-                        } else if let Some(idx) = log.find("Program log: Error: ") {
-                            let msg = log[idx + 20..].trim_end_matches('.').to_string();
-                            if !error_msg.is_empty() {
-                                error_msg.push_str("; ");
-                            }
-                            error_msg.push_str(&msg);
+                let logs = collect_log_messages(&meta.log_messages);
+                for log in &logs {
+                    if let Some(idx) = log.find("Error Message: ") {
+                        let msg = log[idx + 15..].trim_end_matches('.').to_string();
+                        if !error_msg.is_empty() {
+                            error_msg.push_str("; ");
                         }
+                        error_msg.push_str(&msg);
+                    } else if let Some(idx) = log.find("Program log: Error: ") {
+                        let msg = log[idx + 20..].trim_end_matches('.').to_string();
+                        if !error_msg.is_empty() {
+                            error_msg.push_str("; ");
+                        }
+                        error_msg.push_str(&msg);
                     }
                 }
 
                 let ui_err = meta.err.unwrap();
-                let tx_err: TransactionError =
-                    serde_json::from_value(serde_json::to_value(&ui_err)?)?;
+                let raw_err = serde_json::to_value(&ui_err)?;
+                let tx_err: TransactionError = serde_json::from_value(raw_err.clone())?;
 
                 // Use Solana InstructionError codes directly
                 let mut code = 0u32;
@@ -234,6 +278,16 @@ pub async fn poll_any_transaction_confirmation(
                     }
                     _ => {}
                 }
+
+                print_onchain_failure_details(
+                    &landed,
+                    &tx_err,
+                    &raw_err,
+                    index,
+                    code,
+                    &error_msg,
+                    &logs,
+                );
 
                 return Err(anyhow::Error::new(TradeError {
                     code: code,
