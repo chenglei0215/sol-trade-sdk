@@ -9,7 +9,8 @@ use crate::{
 use crate::{
     instruction::utils::pumpfun::{
         accounts, get_bonding_curve_pda, get_bonding_curve_v2_pda, get_creator,
-        get_mayhem_fee_recipient_meta_random, get_user_volume_accumulator_pda,
+        get_mayhem_fee_recipient_meta_random, get_protocol_extra_fee_recipient_random,
+        get_user_volume_accumulator_pda,
         global_constants::{self},
         BUY_DISCRIMINATOR, BUY_EXACT_SOL_IN_DISCRIMINATOR, SELL_DISCRIMINATOR,
     },
@@ -171,6 +172,8 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
             accounts::FEE_PROGRAM_META,
         ];
         accounts.push(AccountMeta::new_readonly(bonding_curve_v2, false)); // remainingAccounts: @pump-fun/pump-sdk 要求末尾传 bondingCurveV2Pda(mint)，勿删
+        // Apr 2026 breaking upgrade: extra protocol fee recipient must be last account, writable
+        accounts.push(AccountMeta::new(get_protocol_extra_fee_recipient_random(), false));
 
         instructions.push(Instruction::new_with_bytes(accounts::PUMPFUN, &buy_data, accounts));
 
@@ -300,6 +303,8 @@ impl InstructionBuilder for PumpFunInstructionBuilder {
             anyhow!("bonding_curve_v2 PDA derivation failed for mint {}", params.input_mint)
         })?;
         accounts.push(AccountMeta::new_readonly(bonding_curve_v2, false));
+        // Apr 2026 breaking upgrade: extra protocol fee recipient must be last account, writable
+        accounts.push(AccountMeta::new(get_protocol_extra_fee_recipient_random(), false));
 
         instructions.push(Instruction::new_with_bytes(accounts::PUMPFUN, &sell_data, accounts));
 
