@@ -305,6 +305,9 @@ pub struct PumpSwapParams {
     pub is_mayhem_mode: bool,
     /// Whether the pool's coin has cashback enabled
     pub is_cashback_coin: bool,
+    /// 从 leader 指令账户中提取的额外 remaining_accounts（如 buyback_fee_recipient 等协议新增账户）。
+    /// 非空时，这些账户会在 cashback 账户之后、pool_v2 之前追加到指令中，保持协议所需顺序。
+    pub extra_remaining_accounts: Vec<Pubkey>,
 }
 
 impl PumpSwapParams {
@@ -338,6 +341,7 @@ impl PumpSwapParams {
             quote_token_program,
             is_mayhem_mode,
             is_cashback_coin,
+            extra_remaining_accounts: vec![],
         }
     }
 
@@ -460,6 +464,7 @@ impl PumpSwapParams {
                 crate::constants::TOKEN_PROGRAM_2022
             },
             is_mayhem_mode: pool_data.is_mayhem_mode,
+            extra_remaining_accounts: vec![],
         })
     }
 }

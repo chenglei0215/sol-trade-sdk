@@ -202,6 +202,10 @@ impl InstructionBuilder for PumpSwapInstructionBuilder {
                 accounts.push(AccountMeta::new(wsol_ata, false));
             }
         }
+        // 追加从 leader 指令提取的额外协议账户（如 buyback_fee_recipient），保持在 pool_v2 之前
+        for acc in &protocol_params.extra_remaining_accounts {
+            accounts.push(AccountMeta::new(*acc, false));
+        }
         // remainingAccounts: @pump-fun/pump-swap-sdk 要求末尾传 poolV2Pda(baseMint)，勿删
         let pool_v2 = get_pool_v2_pda(&base_mint)
             .ok_or_else(|| anyhow!("pool_v2 PDA derivation failed for base_mint {}", base_mint))?;
@@ -402,6 +406,10 @@ impl InstructionBuilder for PumpSwapInstructionBuilder {
                 accounts.push(AccountMeta::new(quote_ata, false));
                 accounts.push(AccountMeta::new(accumulator, false));
             }
+        }
+        // 追加从 leader 指令提取的额外协议账户（如 buyback_fee_recipient），保持在 pool_v2 之前
+        for acc in &protocol_params.extra_remaining_accounts {
+            accounts.push(AccountMeta::new(*acc, false));
         }
         // remainingAccounts: @pump-fun/pump-swap-sdk sell 要求末尾传 poolV2Pda(baseMint)，勿删
         let pool_v2 = get_pool_v2_pda(&base_mint)
